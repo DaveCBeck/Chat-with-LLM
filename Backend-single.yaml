@@ -1,0 +1,350 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates two EC2 Instances for Zep and Chroma, IAM roles, VPC, subnets, security groups, logs with CloudWatch, and EBS volumes
+
+Parameters:
+  NamePrefix:
+    Type: String
+    Description: Prefix for resource names to distinguish between different deployments
+
+  VpcCIDRBlock:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: CIDR block for the VPC
+
+  PublicSubnet1CIDRBlock:
+    Type: String
+    Default: '10.0.1.0/24'
+    Description: CIDR block for the public subnet 1
+
+  PublicSubnet2CIDRBlock:
+    Type: String
+    Default: '10.0.2.0/24'
+    Description: CIDR block for the public subnet 2
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDRBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: MyVPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MyInternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PublicSubnet1CIDRBlock
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PublicSubnet2CIDRBlock
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet2
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: MyRouteTable
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  CommonSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow only port 8000 to be accessible from the internet
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: CommonSecurityGroup
+
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTable
+
+  Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref RouteTable
+
+  ZepInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref ZepIAMRole
+
+  ChromaInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref ChromaIAMRole
+
+  ZepIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  ChromaIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  ZepLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ec2/${NamePrefix}/zep/instance-logs'
+
+  ChromaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ec2/${NamePrefix}/chroma/instance-logs'
+
+  ZepInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0840becec4971bb87
+      InstanceType: t4g.small
+      KeyName: Pods
+      IamInstanceProfile: !Ref ZepInstanceProfile
+      SecurityGroupIds:
+        - !GetAtt CommonSecurityGroup.GroupId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${NamePrefix}-ZepInstance'
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          # Update the system
+          sudo yum update -y
+          
+          # Install and configure the CloudWatch agent
+          sudo yum install amazon-cloudwatch-agent -y
+          sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a start -m ec2 -c default -l INFO
+          # Note - this is not an ideal config
+
+          # Install Docker and docker-compose
+          sudo yum install docker -y
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          sudo service docker start
+          sudo usermod -a -G docker ec2-user
+          
+          #download the docker-compose
+          wget https://raw.githubusercontent.com/DaveCBeck/Chat-with-LLM/main/zep-compose.yaml -O zep-compose.yaml
+          wget https://raw.githubusercontent.com/DaveCBeck/Chat-with-LLM/main/zep-config.yaml -O config.yaml
+
+          #Create a .env for Zep configuration - this is probably bad practice but speeds up deployment
+          echo "ZEP_OPENAI_API_KEY=yourkey" > .env
+          echo "ZEP_AUTH_REQUIRED=true" >> .env
+          echo "ZEP_AUTH_SECRET=testsecret" >> .env
+          echo "ZEP_SERVER_WEB_ENABLED=false" >> .env
+
+          # Run the docker compose file
+          docker-compose -f zep-compose.yml up
+          
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 16
+
+  ChromaInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0840becec4971bb87
+      InstanceType: t4g.medium
+      KeyName: Pods
+      IamInstanceProfile: !Ref ChromaInstanceProfile
+      SecurityGroupIds:
+        - !GetAtt CommonSecurityGroup.GroupId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${NamePrefix}-ChromaInstance'
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          # Update the system
+          sudo yum update -y
+          
+          # Install and configure the CloudWatch agent
+          sudo yum install amazon-cloudwatch-agent -y
+          sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a start -m ec2 -c default -l INFO
+          # Note - this is not an ideal config
+
+          # Install Docker and docker-compose
+          sudo yum install docker -y
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          sudo service docker start
+          sudo usermod -a -G docker ec2-user
+
+          # Set environment variables
+          export IS_PERSISTENT=1
+          export CHROMA_SERVER_AUTH_CREDENTIALS="test-token"
+          export CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER="chromadb.auth.token.TokenConfigServerAuthCredentialsProvider"
+          export CHROMA_SERVER_AUTH_PROVIDER="chromadb.auth.token.TokenAuthServerProvider"
+
+          # Pull and run the docker container
+          docker pull chromadb/chroma:0.4.17
+          docker run -p 8000:8000 chromadb/chroma:0.4.17
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 16
+
+  ZepTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 8000
+      Protocol: HTTP
+      TargetType: instance
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: ZepTargetGroup
+
+  ChromaTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 8000
+      Protocol: HTTP
+      TargetType: instance
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: ChromaTargetGroup
+  
+  ZepLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+
+  ZepListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ZepTargetGroup
+      LoadBalancerArn: !Ref ZepLoadBalancer
+      Port: 8000
+      Protocol: HTTP
+
+  ChromaLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+
+  ChromaListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ChromaTargetGroup
+      LoadBalancerArn: !Ref ChromaLoadBalancer
+      Port: 8000
+      Protocol: HTTP
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow traffic to the load balancer on port 8000
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref Vpc
