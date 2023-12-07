@@ -10,8 +10,7 @@ import { SidebarList } from '@/components/sidebar-list'
 import {
   IconGitHub,
   IconNextChat,
-  IconSeparator,
-  IconVercel
+  IconSeparator
 } from '@/components/ui/icons'
 import { SidebarFooter } from '@/components/sidebar-footer'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -68,16 +67,7 @@ export function Header() {
           className={cn(buttonVariants({ variant: 'outline' }))}
         >
           <IconGitHub />
-          <span className="hidden ml-2 md:flex">GitHub</span>
-        </a>
-        <a
-          href="https://github.com/vercel/nextjs-ai-chatbot/"
-          target="_blank"
-          className={cn(buttonVariants())}
-        >
-          <IconVercel className="mr-2" />
-          <span className="hidden sm:block">Deploy to Vercel</span>
-          <span className="sm:hidden">Deploy</span>
+          <span className="hidden ml-2 md:flex">GitHub Repo</span>
         </a>
       </div>
     </header>
