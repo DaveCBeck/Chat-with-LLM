@@ -1,40 +1,26 @@
-import { kv } from '@vercel/kv'
-import { OpenAIStream, StreamingTextResponse } from 'ai'
-import OpenAI from 'openai'
 
-import { auth } from '@/auth'
+import { LangChainStream, StreamingTextResponse, Message } from 'ai';
+import { ChatOpenAI } from 'langchain/chat_models/openai';
+import { AIMessage, HumanMessage } from 'langchain/schema';
+import { auth } from '@/auth';
+import { kv } from '@vercel/kv'
 import { nanoid } from '@/lib/utils'
 
 export const runtime = 'edge'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
 
 export async function POST(req: Request) {
   const json = await req.json()
   const { messages, previewToken } = json
   const userId = (await auth())?.user.id
-
+  
   if (!userId) {
     return new Response('Unauthorized', {
       status: 401
     })
   }
 
-  if (previewToken) {
-    openai.apiKey = previewToken
-  }
-
-  const res = await openai.chat.completions.create({
-    model: 'gpt-3.5-turbo',
-    messages,
-    temperature: 0.7,
-    stream: true
-  })
-
-  const stream = OpenAIStream(res, {
-    async onCompletion(completion) {
+  const { stream, handlers } = LangChainStream({
+    async onCompletion(stream: any) {
       const title = json.messages[0].content.substring(0, 100)
       const id = json.id ?? nanoid()
       const createdAt = Date.now()
@@ -48,7 +34,7 @@ export async function POST(req: Request) {
         messages: [
           ...messages,
           {
-            content: completion,
+            content: stream,
             role: 'assistant'
           }
         ]
@@ -59,7 +45,22 @@ export async function POST(req: Request) {
         member: `chat:${id}`
       })
     }
-  })
+  });
+  const llm = new ChatOpenAI({
+    streaming: true,
+  });
+
+  llm
+    .call(
+      (messages as Message[]).map(m =>
+        m.role == 'user'
+          ? new HumanMessage(m.content)
+          : new AIMessage(m.content),
+      ),
+      {},
+      [handlers],
+    )
+    .catch(console.error);
 
   return new StreamingTextResponse(stream)
 }
