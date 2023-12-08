@@ -260,14 +260,14 @@ Resources:
           sudo usermod -a -G docker ec2-user
 
           # Set environment variables
-          export IS_PERSISTENT=1
-          export CHROMA_SERVER_AUTH_CREDENTIALS="test-token"
-          export CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER="chromadb.auth.token.TokenConfigServerAuthCredentialsProvider"
-          export CHROMA_SERVER_AUTH_PROVIDER="chromadb.auth.token.TokenAuthServerProvider"
+          echo "CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.token.TokenAuthServerProvider" > .chroma_env
+          echo "CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenConfigServerAuthCredentialsProvider" >> .chroma_env
+          echo "CHROMA_SERVER_AUTH_CREDENTIALS=test-token" >> .chroma_env
+          echo "IS_PERSISTENT=1" >> .chroma_env
 
           # Pull and run the docker container
-          docker pull chromadb/chroma:0.4.17
-          docker run -p 8000:8000 chromadb/chroma:0.4.17
+          sudo docker pull chromadb/chroma:0.4.17
+          sudo docker run --env-file ./.chroma_env -p 8000:8000 chromadb/chroma:0.4.17
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
