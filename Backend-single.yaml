@@ -210,11 +210,11 @@ Resources:
           sudo service docker start
           sudo usermod -a -G docker ec2-user
           
-          #download the docker-compose
+          #download the docker-compose and config files
           wget https://raw.githubusercontent.com/DaveCBeck/Chat-with-LLM/main/zep-compose.yaml -O zep-compose.yaml
           wget https://raw.githubusercontent.com/DaveCBeck/Chat-with-LLM/main/zep-config.yaml -O config.yaml
 
-          #Create a .env for Zep configuration - this is probably bad practice but speeds up deployment
+          #Create a .env for other aspects of Zep configuration - this is probably bad practice but speeds up deployment
           echo "ZEP_OPENAI_API_KEY=yourkey" > .env
           echo "ZEP_AUTH_REQUIRED=true" >> .env
           echo "ZEP_AUTH_SECRET=testsecret" >> .env
@@ -250,7 +250,7 @@ Resources:
           # Install and configure the CloudWatch agent
           sudo yum install amazon-cloudwatch-agent -y
           sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a start -m ec2 -c default -l INFO
-          # Note - this is not an ideal config
+          # Note - this is not an ideal config but it'll do
 
           # Install Docker and docker-compose
           sudo yum install docker -y

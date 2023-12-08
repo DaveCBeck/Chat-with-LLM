@@ -19,7 +19,7 @@ git subtree pull --prefix frontend NextUI main
 (and then merge changes)
 
 # Backend
-Backend-single.yaml is a template for deployment using AWS CloudFormation. It creates two EC2 instances (t4g.medium for Chroma t4g.small for Zep) with no scaling. Uses a nameprefix to distinguish between deployments.
+Backend-single.yaml is a template for deployment using AWS CloudFormation. It creates two EC2 instances (t4g.medium for Chroma t4g.small for Zep) with no scaling. There's a nameprefix to distinguish between deployments as I anticipate using this stack a few times.
 
 Configuration is currently via environment variables within the cloudformation template. Follow the security practices for each service, mentioned below, for persistent deployments.
 
@@ -31,7 +31,7 @@ For document-based RAG.
 ### Deployment
 Set a token in the Backend-single.yaml file, use that token directly in the Chroma DB client config.
 
-## Zep 0.19 - note the config needs some attention (config.yaml maybe?)
+## Zep 0.19 - note the config needs some attention 
 Will not be integrated until LangChain runnables integrate memory classes. Or I set something up directly using an async function via actions.ts.
 
 Used to store chat history (and associate each user to a session). Note that the web interface is disabled as this is a public-facing installation.
