@@ -12,6 +12,9 @@ For now I'll use Vercel KV in place of Zep, until langchain memory integration i
 /frontend/components/header.tsx
 /frontend/components/empty-screen.tsx (the initial display for the user, can be used to populate suggested messages and for other introductory purposes)
 
+## Edits from Vercel's template
+frontend\app\api\chat\route.ts - to integrate LangChainStream
+
 ### Note-to-self
 To bring in updates from Vercel's AI chatbot template, which is still in development:
 git fetch NextUI main
