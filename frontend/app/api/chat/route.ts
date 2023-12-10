@@ -1,12 +1,15 @@
 
 import { LangChainStream, StreamingTextResponse, Message } from 'ai';
 import { ChatOpenAI } from 'langchain/chat_models/openai';
-import { AIMessage, HumanMessage } from 'langchain/schema';
 import { auth } from '@/auth';
 import { kv } from '@vercel/kv'
 import { nanoid } from '@/lib/utils'
+import { PromptTemplate } from "langchain/prompts";
 
 export const runtime = 'edge'
+const formatMessage = (message: Message) => {
+  return `${message.role}: ${message.content}`;
+};
 
 export async function POST(req: Request) {
   const json = await req.json()
@@ -48,19 +51,21 @@ export async function POST(req: Request) {
   });
   const llm = new ChatOpenAI({
     streaming: true,
+    callbacks: [handlers],
   });
+  const currentMessageContent = messages[messages.length - 1].content;
+  console.log(currentMessageContent)
+  
+  const previousmessages = messages.slice(0, -1).map(formatMessage)
+  console.log(previousmessages)
 
-  llm
-    .call(
-      (messages as Message[]).map(m =>
-        m.role == 'user'
-          ? new HumanMessage(m.content)
-          : new AIMessage(m.content),
-      ),
-      {},
-      [handlers],
-    )
-    .catch(console.error);
+  const finalprompt = PromptTemplate.fromTemplate(
+    "{history}, {latest}"
+  );
+  
+  const chain = finalprompt.pipe(llm);
+  
+  chain.invoke({ history: previousmessages, latest: currentMessageContent });
 
   return new StreamingTextResponse(stream)
 }
