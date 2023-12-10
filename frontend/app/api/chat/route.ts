@@ -5,6 +5,8 @@ import { auth } from '@/auth';
 import { kv } from '@vercel/kv'
 import { nanoid } from '@/lib/utils'
 import { PromptTemplate } from "langchain/prompts";
+import { RunnableSequence } from "langchain/schema/runnable";
+import { StringOutputParser } from "langchain/schema/output_parser";
 
 export const runtime = 'edge'
 const formatMessage = (message: Message) => {
@@ -49,6 +51,8 @@ export async function POST(req: Request) {
       })
     }
   });
+ 
+  const model = new ChatOpenAI() 
   const llm = new ChatOpenAI({
     streaming: true,
     callbacks: [handlers],
@@ -59,13 +63,23 @@ export async function POST(req: Request) {
   const previousmessages = messages.slice(0, -1).map(formatMessage)
   console.log(previousmessages)
 
-  const finalprompt = PromptTemplate.fromTemplate(
+  const initialprompt = PromptTemplate.fromTemplate(
     "{history}, {latest}"
   );
+  const finalprompt = PromptTemplate.fromTemplate(
+    "Could you re-write this into a funny limerick, please? {resp}"
+  );
   
-  const chain = finalprompt.pipe(llm);
+  const chain = initialprompt.pipe(model).pipe(new StringOutputParser())
+  const combinedChain = RunnableSequence.from([
+    {
+      resp: chain,
+    },
+    finalprompt,
+    llm,
+  ]);
   
-  chain.invoke({ history: previousmessages, latest: currentMessageContent });
+  combinedChain.invoke({ history: previousmessages, latest: currentMessageContent });
 
   return new StreamingTextResponse(stream)
 }
