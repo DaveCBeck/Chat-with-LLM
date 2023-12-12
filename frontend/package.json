@@ -25,6 +25,7 @@
     "@vercel/kv": "^1.0.0",
     "@vercel/og": "^0.5.20",
     "ai": "^2.2.25",
+    "chromadb": "^1.6.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "focus-trap-react": "^10.2.3",

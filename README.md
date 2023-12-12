@@ -13,7 +13,7 @@ For now I'll use Vercel KV in place of Zep, until langchain memory integration i
 /frontend/components/empty-screen.tsx (the initial display for the user, can be used to populate suggested messages and for other introductory purposes)
 
 ## Edits from Vercel's template
-frontend\app\api\chat\route.ts - to integrate LangChainStream
+frontend\app\api\chat\route.ts - to integrate LangChainStream, and use Chroma. Note that Chroma doesn't currently work on the Edge, so this requires the Pro plan on Vercel (to avoid the 10s timeout for serverless functions).
 
 ### Note-to-self
 To bring in updates from Vercel's AI chatbot template, which is still in development:

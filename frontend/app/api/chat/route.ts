@@ -7,8 +7,10 @@ import { nanoid } from '@/lib/utils'
 import { PromptTemplate } from "langchain/prompts";
 import { RunnableSequence } from "langchain/schema/runnable";
 import { StringOutputParser } from "langchain/schema/output_parser";
+import { ChromaClient } from 'chromadb'
 
-export const runtime = 'edge'
+// off the Edge for now, because otherwise the ChromaClient times out without sending a request to the server.
+//export const runtime = 'edge'
 const formatMessage = (message: Message) => {
   return `${message.role}: ${message.content}`;
 };
@@ -51,7 +53,12 @@ export async function POST(req: Request) {
       })
     }
   });
- 
+ // Connecting to Chroma 
+  const client = new ChromaClient({
+  path: process.env.CHROMA_URL,
+  });
+  console.log(await client.heartbeat())
+
   const model = new ChatOpenAI() 
   const llm = new ChatOpenAI({
     streaming: true,
