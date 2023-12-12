@@ -28,6 +28,7 @@
     "chromadb": "^1.6.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
+    "cohere-ai": "^7.6.0",
     "focus-trap-react": "^10.2.3",
     "framer-motion": "^10.16.12",
     "geist": "^1.1.0",

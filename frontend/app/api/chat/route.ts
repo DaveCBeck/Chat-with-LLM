@@ -9,8 +9,8 @@ import { RunnableSequence } from "langchain/schema/runnable";
 import { StringOutputParser } from "langchain/schema/output_parser";
 import { ChromaClient } from 'chromadb'
 
-// off the Edge for now, because otherwise the ChromaClient times out without sending a request to the server.
-//export const runtime = 'edge'
+// back on the Edge to test and diagnose timeout issue.
+export const runtime = 'edge'
 const formatMessage = (message: Message) => {
   return `${message.role}: ${message.content}`;
 };
@@ -53,11 +53,25 @@ export async function POST(req: Request) {
       })
     }
   });
- // Connecting to Chroma 
-  const client = new ChromaClient({
-  path: process.env.CHROMA_URL,
-  });
-  console.log(await client.heartbeat())
+  // Connecting to Chroma with a timeout to try and catch the stack
+  const timeout = (ms: any) => new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), ms));
+
+  try {
+    const client = new ChromaClient({
+      path: process.env.CHROMA_URL,
+    });
+    // Use Promise.race to throw an error if the heartbeat takes longer than 5 seconds
+    const result = await Promise.race([
+      client.heartbeat(),
+      timeout(5000) // 5 seconds timeout
+    ]);
+    console.log(result);
+  } catch (error) {
+    const e = error as Error;
+    console.error('Error occurred:', e.message);
+    // The stack trace might not be very detailed in Vercel Edge, but it's worth logging
+    console.error('Stack Trace:', e.stack);
+  }
 
   const model = new ChatOpenAI() 
   const llm = new ChatOpenAI({
