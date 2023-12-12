@@ -60,6 +60,7 @@ export async function POST(req: Request) {
     const client = new ChromaClient({
       path: process.env.CHROMA_URL,
     });
+    console.trace();
     // Use Promise.race to throw an error if the heartbeat takes longer than 5 seconds
     const result = await Promise.race([
       client.heartbeat(),
@@ -69,8 +70,9 @@ export async function POST(req: Request) {
   } catch (error) {
     const e = error as Error;
     console.error('Error occurred:', e.message);
-    // The stack trace might not be very detailed in Vercel Edge, but it's worth logging
+    // Couple of different attempts at getting a stack trace
     console.error('Stack Trace:', e.stack);
+    console.trace();
   }
 
   const model = new ChatOpenAI() 
