@@ -10,7 +10,9 @@ import { StringOutputParser } from "langchain/schema/output_parser";
 import { ChromaClient } from 'chromadb'
 
 // off the Edge for now, because otherwise the ChromaClient times out without sending a request to the server.
+export const maxDuration = 300
 //export const runtime = 'edge'
+
 const formatMessage = (message: Message) => {
   return `${message.role}: ${message.content}`;
 };
@@ -54,10 +56,16 @@ export async function POST(req: Request) {
     }
   });
  // Connecting to Chroma 
-  const client = new ChromaClient({
+ const client = new ChromaClient({
   path: process.env.CHROMA_URL,
+  auth: {
+    provider: "token",
+    credentials: process.env.CHROMA_TOKEN,
+    providerOptions: { headerType: "AUTHORIZATION" },
+  },
   });
   console.log(await client.heartbeat())
+  console.log(await client.listCollections())
 
   const model = new ChatOpenAI() 
   const llm = new ChatOpenAI({
