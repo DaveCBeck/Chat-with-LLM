@@ -1,4 +1,3 @@
-
 import { LangChainStream, StreamingTextResponse, Message } from 'ai';
 import { ChatOpenAI } from 'langchain/chat_models/openai';
 import { auth } from '@/auth';
@@ -7,10 +6,10 @@ import { nanoid } from '@/lib/utils'
 import { PromptTemplate } from "langchain/prompts";
 import { RunnableSequence } from "langchain/schema/runnable";
 import { StringOutputParser } from "langchain/schema/output_parser";
-import { ChromaClient } from 'chromadb'
+import { ChromaClient } from 'chromadb';
 
 // off the Edge for now, because otherwise the ChromaClient times out without sending a request to the server.
-export const maxDuration = 300
+export const maxDuration = 300;
 //export const runtime = 'edge'
 
 const formatMessage = (message: Message) => {
@@ -29,6 +28,7 @@ export async function POST(req: Request) {
   }
 
   const { stream, handlers } = LangChainStream({
+    // Store the messages in KV on completion of the stream
     async onCompletion(stream: any) {
       const title = json.messages[0].content.substring(0, 100)
       const id = json.id ?? nanoid()
@@ -55,7 +55,8 @@ export async function POST(req: Request) {
       })
     }
   });
- // Connecting to Chroma 
+ 
+// Connecting to Chroma 
  const client = new ChromaClient({
   path: process.env.CHROMA_URL,
   auth: {
@@ -67,34 +68,38 @@ export async function POST(req: Request) {
   console.log(await client.heartbeat())
   console.log(await client.listCollections())
 
+// Initial chain to craft a vectorstore query
   const model = new ChatOpenAI() 
-  const llm = new ChatOpenAI({
+  const currentMessageContent = messages[messages.length - 1].content;
+  console.log(currentMessageContent)
+  const previousmessages = messages.slice(0, -1).map(formatMessage)
+  console.log(previousmessages)
+  const initialPrompt = PromptTemplate.fromTemplate(
+    `Please write a vectorstore query to retrieve relevent information for creating a response to the message below. Include context from the conversation history as appropriate, and ensure the latest message is included in full.
+    
+    Conversation History: {history} 
+    
+    Latest: {latest}`
+  );
+  const contextChain = initialPrompt.pipe(model).pipe(new StringOutputParser())
+
+// Final chain to generate the response that's streamed to the client
+  const finalllm = new ChatOpenAI({
     streaming: true,
     callbacks: [handlers],
   });
-  const currentMessageContent = messages[messages.length - 1].content;
-  console.log(currentMessageContent)
-  
-  const previousmessages = messages.slice(0, -1).map(formatMessage)
-  console.log(previousmessages)
-
-  const initialprompt = PromptTemplate.fromTemplate(
-    "{history}, {latest}"
-  );
-  const finalprompt = PromptTemplate.fromTemplate(
+  const stylePrompt = PromptTemplate.fromTemplate(
     "Could you re-write this into a funny limerick, please? {resp}"
   );
   
-  const chain = initialprompt.pipe(model).pipe(new StringOutputParser())
+// Chain-of-chains, call and return
   const combinedChain = RunnableSequence.from([
     {
-      resp: chain,
+      resp: contextChain,
     },
-    finalprompt,
-    llm,
+    stylePrompt,
+    finalllm,
   ]);
-  
   combinedChain.invoke({ history: previousmessages, latest: currentMessageContent });
-
   return new StreamingTextResponse(stream)
 }
