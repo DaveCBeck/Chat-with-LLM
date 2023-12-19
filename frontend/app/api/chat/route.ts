@@ -4,20 +4,28 @@ import { auth } from '@/auth';
 import { kv } from '@vercel/kv'
 import { nanoid } from '@/lib/utils'
 import { PromptTemplate } from "langchain/prompts";
-import { RunnableSequence, RunnablePassthrough } from "langchain/schema/runnable";
+import { RunnableSequence } from "langchain/schema/runnable";
 import { StringOutputParser } from "langchain/schema/output_parser";
 import { ChromaClient } from 'chromadb';
 import { Chroma } from "langchain/vectorstores/chroma";
 import { OpenAIEmbeddings } from "langchain/embeddings/openai";
-import { formatDocumentsAsString } from "langchain/util/document";
 
 // off the Edge for now, because otherwise the ChromaClient times out without sending a request to the server.
-export const maxDuration = 300;
+export const maxDuration = 300; // comment this out if running on the edge
 //export const runtime = 'edge'
 
-const chromacollection = "CuriousHumanssentences"
+// Function to format messages simply
 const formatMessage = (message: Message) => {
   return `${message.role}: ${message.content}`;
+};
+
+// Function to process documents and extract 'window' metadata, as produced by LlamaIndex when loading documents onto server
+const extractWindowMetadata = (documents: any[]) => {
+  return documents.map((document) => {
+    const metadata = document.metadata;
+    const nodeContent = JSON.parse(metadata._node_content);
+    return nodeContent.metadata.window;
+  }).join('....'); // Join the windows with ...
 };
 
 export async function POST(req: Request) {
@@ -85,6 +93,7 @@ const initialPrompt = PromptTemplate.fromTemplate(
   });
   console.log(await chromaclient.heartbeat())
   console.log(await chromaclient.listCollections())
+  const chromacollection = String(process.env.CHROMA_COLLECTION)
   const collection = await chromaclient.getCollection({ name: chromacollection });
   console.log(await collection.count())
 
@@ -96,15 +105,6 @@ const initialPrompt = PromptTemplate.fromTemplate(
     collectionName: chromacollection,
   })
   const retriever = (await client).asRetriever({k : 8})
-
-  // Function to process documents and extract 'window' metadata
-  const extractWindowMetadata = (documents: any[]) => {
-    return documents.map((document) => {
-      const metadata = document.metadata;
-      const nodeContent = JSON.parse(metadata._node_content);
-      return nodeContent.metadata.window;
-    }).join('....'); // Join the windows with a space, or use any other delimiter you prefer
-  };
 
 // Chain to retrieve relevent context from Chroma - pipes the prompt to a model defined above and uses a stringified response to retrieve content from the DB, the formats the documents as a string.
   const contextChain = initialPrompt.pipe(model).pipe(new StringOutputParser()).pipe(retriever).pipe(extractWindowMetadata)
