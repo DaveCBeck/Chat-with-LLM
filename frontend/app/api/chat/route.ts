@@ -95,10 +95,19 @@ const initialPrompt = PromptTemplate.fromTemplate(
     numDimensions: 1536,
     collectionName: chromacollection,
   })
-  const retriever = (await client).asRetriever()
+  const retriever = (await client).asRetriever({k : 8})
+
+  // Function to process documents and extract 'window' metadata
+  const extractWindowMetadata = (documents: any[]) => {
+    return documents.map((document) => {
+      const metadata = document.metadata;
+      const nodeContent = JSON.parse(metadata._node_content);
+      return nodeContent.metadata.window;
+    }).join('....'); // Join the windows with a space, or use any other delimiter you prefer
+  };
 
 // Chain to retrieve relevent context from Chroma - pipes the prompt to a model defined above and uses a stringified response to retrieve content from the DB, the formats the documents as a string.
-  const contextChain = initialPrompt.pipe(model).pipe(new StringOutputParser()).pipe(retriever).pipe(formatDocumentsAsString)
+  const contextChain = initialPrompt.pipe(model).pipe(new StringOutputParser()).pipe(retriever).pipe(extractWindowMetadata)
 
 // Final chain to generate the response that's streamed to the client
   const finalllm = new ChatOpenAI({
