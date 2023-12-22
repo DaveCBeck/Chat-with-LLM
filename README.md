@@ -9,6 +9,8 @@ Edited to integrate Langchain and Chroma RAG (frontend\app\api\chat\route.ts).
 
 And to replace vercel's KV memory store with Zep (multiple files, see history). Users and sessions are associated in Zep.
 
+Deployment via Vercel, the .env template lists the environment variables you need to set. Note that the URL's for the servers must be in IPv4 DNS format (with a .com or similar at the end), not just the IP address.
+
 ## To Personalize (visuals)
 /frontend/components/footer.tsx
 /frontend/components/header.tsx
