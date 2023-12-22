@@ -1,7 +1,6 @@
 import { LangChainStream, StreamingTextResponse, Message } from 'ai';
 import { ChatOpenAI } from 'langchain/chat_models/openai';
 import { auth } from '@/auth';
-import { kv } from '@vercel/kv'
 import { nanoid } from '@/lib/utils'
 import { PromptTemplate } from "langchain/prompts";
 import { RunnableSequence } from "langchain/schema/runnable";
@@ -9,10 +8,13 @@ import { StringOutputParser } from "langchain/schema/output_parser";
 import { ChromaClient } from 'chromadb';
 import { Chroma } from "langchain/vectorstores/chroma";
 import { OpenAIEmbeddings } from "langchain/embeddings/openai";
+import { ZepClient, Memory, Message as ZepMessage }  from '@getzep/zep-js'
 
 // off the Edge for now, because otherwise the ChromaClient times out without sending a request to the server.
 export const maxDuration = 300; // comment this out if running on the edge
 //export const runtime = 'edge'
+const zepURL = process.env.ZEP_URL || ''
+const zepapikey = process.env.ZEP_API_KEY || ''
 
 // Function to format messages simply
 const formatMessage = (message: Message) => {
@@ -42,29 +44,23 @@ export async function POST(req: Request) {
   const { stream, handlers } = LangChainStream({
     // Store the messages in KV on completion of the stream; will replace this with Zep at some point
     async onCompletion(stream: any) {
+      const zepClient = await ZepClient.init(zepURL, zepapikey);
       const title = json.messages[0].content.substring(0, 100)
-      const id = json.id ?? nanoid()
-      const createdAt = Date.now()
-      const path = `/chat/${id}`
-      const payload = {
-        id,
-        title,
-        userId,
-        createdAt,
-        path,
-        messages: [
+      const sessionID = json.id ?? nanoid()
+      const history: Message[] = [
           ...messages,
           {
             content: stream,
             role: 'assistant'
           }
         ]
-      }
-      await kv.hmset(`chat:${id}`, payload)
-      await kv.zadd(`user:chat:${userId}`, {
-        score: createdAt,
-        member: `chat:${id}`
-      })
+      const zepmessages: ZepMessage[] = history.map(
+          ({ role, content }) => new ZepMessage({ role, content })
+       );
+     const memory = new Memory({ messages: zepmessages });
+     
+     await zepClient.memory.addMemory(sessionID, memory);
+      
     }
   });
  

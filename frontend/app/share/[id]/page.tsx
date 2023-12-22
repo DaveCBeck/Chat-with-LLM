@@ -1,10 +1,20 @@
 import { type Metadata } from 'next'
 import { notFound } from 'next/navigation'
-
 import { formatDate } from '@/lib/utils'
 import { getSharedChat } from '@/app/actions'
 import { ChatList } from '@/components/chat-list'
 import { FooterText } from '@/components/footer'
+import { Message } from 'ai'
+
+function transformZepMessagesToChatMessages(zepMessages: any[]): Message[] {
+  console.log("Transforming Zep messages")
+  return zepMessages.map((zepMessage) => ({
+    id: zepMessage.uuid,
+    createdAt: zepMessage.created_at,
+    role: zepMessage.role === 'ai' ? 'assistant' : 'user',
+    content: zepMessage.content
+  }));
+}
 
 interface SharePageProps {
   params: {
@@ -18,16 +28,17 @@ export async function generateMetadata({
   const chat = await getSharedChat(params.id)
 
   return {
-    title: chat?.title.slice(0, 50) ?? 'Chat'
+    title: chat?.messages[0].content.substring(0, 50) ?? 'Chat'
   }
 }
 
 export default async function SharePage({ params }: SharePageProps) {
   const chat = await getSharedChat(params.id)
 
-  if (!chat || !chat?.sharePath) {
+  if (!chat) {
     notFound()
   }
+  const transformedMessages = transformZepMessagesToChatMessages(chat.messages);
 
   return (
     <>
@@ -42,7 +53,7 @@ export default async function SharePage({ params }: SharePageProps) {
             </div>
           </div>
         </div>
-        <ChatList messages={chat.messages} />
+        <ChatList messages={transformedMessages} />
       </div>
       <FooterText className="py-8" />
     </>
